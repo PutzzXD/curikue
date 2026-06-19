@@ -1,337 +1,263 @@
--- ╔══════════════════════════════════════════════╗
--- ║         PUTZZDEV | CURI KUE SCRIPT           ║
--- ║     ESP Cookie + NoClip + Auto Collect       ║
--- ║        + Chams Nenek (Fixed)                ║
--- ╚══════════════════════════════════════════════╝
+-- ================== DRIP CLIENT PREMIUM - CURI KUE EDITION ==================
 
-local Players     = game:GetService("Players")
-local RunService  = game:GetService("RunService")
-local Camera      = workspace.CurrentCamera
+-- ================== LOAD SERVICES ==================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
 
--- ================== STATE ==================
-local espCookieEnabled   = false
-local noclipEnabled      = false
-local noclipConn         = nil
-local chamsEnabled       = false
-local autoCollectEnabled = false
+-- Rayfield Library
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
-local chamsColor        = Color3.fromRGB(255, 0, 0) -- Merah buat Nenek (warning)
-local chamsTransparency = 0.3
-local chamsParts        = {}  -- {nenekObject = highlightInstance}
-local chamsConnections  = {}
-
--- ================== COOKIE ESP DATA ==================
-local cookieData = {}
-
-local function newText(color, size)
-    local t = Drawing.new("Text")
-    t.Size = size or 14; t.Color = color; t.Center = true
-    t.Outline = true; t.OutlineColor = Color3.fromRGB(0,0,0); t.Visible = false
-    return t
-end
-
-local function isCookiePart(obj)
-    local n = obj.Name:lower()
-    return n:find("cookie") or n:find("kue") or n:find("biscuit") or n:find("biskuit")
-end
-
-local function isNenek(obj)
-    local n = obj.Name:lower()
-    return n:find("nenek") or n:find("grandma") or n:find("grandmother")
-end
-
-local function initCookieESP()
-    -- Hapus data lama
-    for _, d in pairs(cookieData) do
-        pcall(function() d.label:Remove() end)
-        pcall(function() if d.hl then d.hl:Destroy() end end)
-    end
-    cookieData = {}
-
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if (obj:IsA("Model") or obj:IsA("BasePart")) and isCookiePart(obj) then
-            -- Skip kalo bagian dari karakter player
-            if LocalPlayer.Character and obj:IsDescendantOf(LocalPlayer.Character) then continue end
-            
-            local hl = Instance.new("Highlight")
-            hl.FillColor = Color3.fromRGB(255, 210, 80)
-            hl.FillTransparency = 0.25
-            hl.OutlineColor = Color3.fromRGB(255, 255, 150)
-            hl.OutlineTransparency = 0
-            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            hl.Enabled = false
-            hl.Parent = obj
-            
-            local lbl = newText(Color3.fromRGB(255, 210, 80), 14)
-            table.insert(cookieData, {obj = obj, hl = hl, label = lbl})
-        end
-    end
-end
-
--- Init awal
-initCookieESP()
-
--- Re-scan tiap 5 detik
-task.spawn(function()
-    while true do
-        task.wait(5)
-        if espCookieEnabled then initCookieESP() end
-    end
-end)
-
--- ================== NOCLIP ==================
-local function startNoclip()
-    if noclipConn then noclipConn:Disconnect() end
-    noclipConn = RunService.Stepped:Connect(function()
-        if noclipEnabled and LocalPlayer.Character then
-            for _, p in pairs(LocalPlayer.Character:GetDescendants()) do
-                if p:IsA("BasePart") then
-                    p.CanCollide = false
-                end
-            end
-        end
-    end)
-end
-
-local function stopNoclip()
-    if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
-    if LocalPlayer.Character then
-        for _, p in pairs(LocalPlayer.Character:GetDescendants()) do
-            if p:IsA("BasePart") then
-                p.CanCollide = true
-            end
-        end
-    end
-end
-
--- ================== AUTO COLLECT COOKIE (FIXED) ==================
-local function getNearestCookie()
-    if not LocalPlayer.Character then return nil end
-    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
-
-    local nearest = nil
-    local nearestDist = math.huge
-
-    for _, d in pairs(cookieData) do
-        local obj = d.obj
-        if obj and obj.Parent then
-            local targetPart = obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")) or obj
-            if targetPart and targetPart.Transparency < 1 then
-                local dist = (hrp.Position - targetPart.Position).Magnitude
-                if dist < nearestDist then
-                    nearestDist = dist
-                    nearest = targetPart
-                end
-            end
-        end
-    end
-    return nearest, nearestDist
-end
-
-task.spawn(function()
-    while true do
-        task.wait(0.15) -- loop cepat biar responsif
-        if autoCollectEnabled and LocalPlayer.Character then
-            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if not hrp then continue end
-
-            local target, dist = getNearestCookie()
-            if target and dist < 50 then -- dalam jangkauan 50 studs
-                -- Gerakan mulus ke target menggunakan Tween
-                local targetPos = target.Position + Vector3.new(0, 3, 0) -- di atas cookie
-                local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Linear)
-                local tween = TweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(targetPos)})
-                tween:Play()
-                tween.Completed:Wait()
-
-                -- Coba ambil cookie dengan ProximityPrompt
-                local prompt = target.Parent:FindFirstChildOfClass("ProximityPrompt") or target:FindFirstChildOfClass("ProximityPrompt")
-                if prompt then
-                    fireproximityprompt(prompt)
-                    task.wait(0.2)
-                else
-                    -- Alternatif: simulasi klik atau touch (jika game menggunakan ClickDetector)
-                    local click = target.Parent:FindFirstChildOfClass("ClickDetector") or target:FindFirstChildOfClass("ClickDetector")
-                    if click then
-                        click:Click()
-                        task.wait(0.2)
-                    end
-                end
-
-                -- Tunggu sebentar biar cookie ke-ambil
-                task.wait(0.3)
-            end
-        end
-    end
-end)
-
--- ================== CHAMS UNTUK NENEK (FIXED) ==================
-local function applyChamsToNenek(nenekModel)
-    if not nenekModel or not nenekModel.Parent then return end
-    -- Hapus highlight sebelumnya jika ada
-    local old = chamsParts[nenekModel]
-    if old then
-        pcall(function() old:Destroy() end)
-        chamsParts[nenekModel] = nil
-    end
-
-    local hl = Instance.new("Highlight")
-    hl.Name                = "NenekChams"
-    hl.FillColor           = chamsColor
-    hl.FillTransparency    = chamsTransparency
-    hl.OutlineColor        = Color3.fromRGB(255, 255, 255)
-    hl.OutlineTransparency = 0
-    hl.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
-    hl.Adornee             = nenekModel
-    hl.Parent              = nenekModel
-
-    chamsParts[nenekModel] = hl
-end
-
-local function removeChamsFromNenek(nenekModel)
-    if not nenekModel then return end
-    local hl = chamsParts[nenekModel]
-    if hl then
-        pcall(function() hl:Destroy() end)
-        chamsParts[nenekModel] = nil
-    end
-    -- Cari highlight liar
-    local stray = nenekModel:FindFirstChild("NenekChams")
-    if stray then pcall(function() stray:Destroy() end) end
-end
-
-local function scanNenek()
-    if not chamsEnabled then return end
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and isNenek(obj) then
-            applyChamsToNenek(obj)
-        end
-    end
-end
-
-local function toggleChams(state)
-    chamsEnabled = state
-    if state then
-        scanNenek()
-        -- Listen for new Nenek
-        local conn = workspace.DescendantAdded:Connect(function(obj)
-            if chamsEnabled and obj:IsA("Model") and isNenek(obj) then
-                applyChamsToNenek(obj)
-            end
-        end)
-        table.insert(chamsConnections, conn)
-        -- Cleanup saat Nenek dihapus
-        local conn2 = workspace.DescendantRemoving:Connect(function(obj)
-            if obj:IsA("Model") and isNenek(obj) then
-                removeChamsFromNenek(obj)
-            end
-        end)
-        table.insert(chamsConnections, conn2)
-    else
-        -- Hapus semua chams Nenek
-        for nenek, hl in pairs(chamsParts) do
-            pcall(function() hl:Destroy() end)
-        end
-        chamsParts = {}
-        for _, conn in pairs(chamsConnections) do
-            pcall(function() conn:Disconnect() end)
-        end
-        chamsConnections = {}
-        -- Hapus highlight yang tertinggal
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if obj:IsA("Model") and isNenek(obj) then
-                local stray = obj:FindFirstChild("NenekChams")
-                if stray then pcall(function() stray:Destroy() end) end
-            end
-        end
-    end
-end
-
--- Re-scan Nenek tiap 3 detik
-task.spawn(function()
-    while true do
-        task.wait(3)
-        if chamsEnabled then scanNenek() end
-    end
-end)
-
--- ================== RENDER LOOP ESP COOKIE ==================
-RunService.RenderStepped:Connect(function()
-    local myChar = LocalPlayer.Character
-    local myHRP  = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local myPos  = myHRP and myHRP.Position
-
-    for _, d in pairs(cookieData) do
-        local obj = d.obj
-        if obj and obj.Parent and espCookieEnabled and myPos then
-            local pp = obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")) or obj
-            if pp then
-                local sp, vis = Camera:WorldToViewportPoint(pp.Position)
-                local dist    = math.floor((myPos - pp.Position).Magnitude)
-                if vis then
-                    d.label.Position = Vector2.new(sp.X, sp.Y - 14)
-                    d.label.Text     = "🍪 COOKIE [" .. dist .. "m]"
-                    d.label.Visible  = true
-                    d.hl.Enabled     = true
-                else
-                    d.label.Visible = false
-                    d.hl.Enabled    = false
-                end
-            end
-        else
-            d.label.Visible = false
-            if d.hl then d.hl.Enabled = false end
-        end
-    end
-end)
-
--- ================== RAYFIELD UI ==================
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
+-- ================== INITIALIZATION ==================
 local Window = Rayfield:CreateWindow({
-    Name           = "Curi Kue | Putzzdev",
-    LoadingTitle   = "Curi Kue Script",
-    LoadingSubtitle= "by Putzzdev",
+    Name = "Drip Client - Curi Kue 🍪",
+    LoadingTitle = "Putzzdev",
+    LoadingSubtitle = "Premium Edition",
+    Theme = "Amethyst",
+    DisableRayfieldPrompts = true,
+    DisableBuildWarnings = true,
     ConfigurationSaving = { Enabled = false },
-    Discord = { Enabled = false },
     KeySystem = false,
 })
 
-local TabMain = Window:CreateTab("Main", "cookie")
+-- ================== VARIABLES ==================
+-- Toggles
+local _G = {
+    AutoCollectEat = false,
+    GrandmaESP = false,
+    CookieESP = false,
+    WalkSpeedEnabled = false,
+    JumpPowerEnabled = false,
+    NoClipEnabled = false,
+    InfiniteStamina = false,
+}
+
+-- Values
+local customSpeed = 50
+local customJump = 50
+
+-- Storage untuk ESP Drawing
+local grandmaHighlights = {}
+local cookieDrawings = {}
+
+-- ================== UTILITY FUNCTIONS ==================
+
+-- Fungsi mencari Nenek di dalam Game (Berdasarkan nama umum NPC Nenek)
+local function getGrandma()
+    -- Mencari di Workspace
+    for _, obj in pairs(workspace:GetChildren()) do
+        if obj:IsA("Model") and (string.find(string.lower(obj.Name), "grandma") or string.find(string.lower(obj.Name), "nenek")) then
+            return obj
+        end
+    end
+    -- Mencari jika Nenek masuk sebagai Player/Bot khusus
+    for _, p in pairs(Players:GetPlayers()) do
+        if string.find(string.lower(p.Name), "grandma") or string.find(string.lower(p.Name), "nenek") then
+            return p.Character
+        end
+    end
+    return nil
+end
+
+-- Fungsi mencari objek Kue / Cookies di Map
+local function findCookies()
+    local cookies = {}
+    for _, obj in pairs(workspace:GetDescendants()) do
+        -- Menyesuaikan nama objek kue (Cookie, Cookies, Cake, dsb)
+        if obj:IsA("BasePart") or obj:IsA("MeshPart") or obj:IsA("Model") then
+            if string.find(string.lower(obj.Name), "cookie") or string.find(string.lower(obj.Name), "kue") then
+                table.insert(cookies, obj)
+            end
+        elseif obj:IsA("ProximityPrompt") then
+            if string.find(string.lower(obj.Parent.Name), "cookie") or string.find(string.lower(obj.Parent.Name), "kue") then
+                table.insert(cookies, obj.Parent)
+            end
+        end
+    end
+    return cookies
+end
+
+-- ================== LOOP LOOPS / AUTOMATION ==================
+
+-- 1. INSTANT AUTO COLLECT + AUTO EAT
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if _G.AutoCollectEat and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = LocalPlayer.Character.HumanoidRootPart
+            local cookies = findCookies()
+            
+            for _, cookie in pairs(cookies) do
+                if _G.AutoCollectEat == false then break end
+                
+                -- Deteksi bagian utama part kue
+                local targetPart = cookie:IsA("Model") and (cookie:FindFirstChild("Handle") or cookie:FindFirstChildOfClass("BasePart")) or cookie
+                
+                if targetPart and targetPart:IsA("BasePart") then
+                    -- Simpan CFrame asli untuk dikembalikan nanti (mencegah glitch jatuh)
+                    local originalCF = hrp.CFrame
+                    
+                    -- INSTANT TELEPORT (Sangat cepat ke kue lalu balik lagi)
+                    pcall(function()
+                        -- Teleport ke kue
+                        hrp.CFrame = targetPart.CFrame
+                        task.wait(0.05)
+                        
+                        -- Trigger ProximityPrompt jika ada mekanismenya
+                        local prompt = cookie:FindFirstChildOfClass("ProximityPrompt") or cookie.Parent:FindFirstChildOfClass("ProximityPrompt")
+                        if prompt then
+                            fireproximityprompt(prompt)
+                        end
+                        
+                        -- Simulasi Instan "Makan/Eat" (Biasanya menggunakan Tools di Inventory)
+                        local backpack = LocalPlayer:FindFirstChild("Backpack")
+                        local char = LocalPlayer.Character
+                        
+                        -- Cari item kue di inventory untuk dipakai/dimakan
+                        if backpack then
+                            for _, tool in pairs(backpack:GetChildren()) do
+                                if string.find(string.lower(tool.Name), "cookie") or string.find(string.lower(tool.Name), "kue") then
+                                    tool.Parent = char -- Equip kue
+                                    task.wait(0.05)
+                                    tool:Activate() -- Makan kue
+                                    task.wait(0.05)
+                                    tool.Parent = backpack -- Taruh kembali jika belum habis
+                                end
+                            end
+                        end
+                        
+                        -- Kembalikan posisi player ke posisi semula agar aman
+                        hrp.CFrame = originalCF
+                    end)
+                end
+            end
+        end
+    end
+end)
+
+-- 2. NENEK ESP (HOLOGRAM GREEN)
+RunService.Heartbeat:Connect(function()
+    if _G.GrandmaESP then
+        local grandma = getGrandma()
+        if grandma and grandma:FindFirstChildOfClass("Humanoid") then
+            if not grandmaHighlights[grandma] then
+                local hl = Instance.new("Highlight")
+                hl.Name = "GrandmaHoloESP"
+                hl.FillColor = Color3.fromRGB(0, 255, 0) -- Hijau Full
+                hl.OutlineColor = Color3.fromRGB(0, 255, 0)
+                hl.FillTransparency = 0.4
+                hl.OutlineTransparency = 0
+                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                hl.Adornee = grandma
+                hl.Parent = grandma
+                grandmaHighlights[grandma] = hl
+            end
+        end
+    else
+        -- Hapus Highlight jika dimatikan
+        for gm, hl in pairs(grandmaHighlights) do
+            if hl then hl:Destroy() end
+            grandmaHighlights[gm] = nil
+        end
+    end
+end)
+
+-- 3. COOKIES ESP (TEXT DRAWING)
+RunService.RenderStepped:Connect(function()
+    if _G.CookieESP and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+        local cookies = findCookies()
+        
+        -- Hapus text lama yang sudah tidak valid
+        for cookie, text in pairs(cookieDrawings) do
+            if not cookie or not cookie.Parent then
+                text.Visible = false
+                text:Remove()
+                cookieDrawings[cookie] = nil
+            end
+        end
+        
+        -- Buat atau perbarui posisi teks ESP kue
+        for _, cookie in pairs(cookies) do
+            local part = cookie:IsA("Model") and (cookie:FindFirstChild("Handle") or cookie:FindFirstChildOfClass("BasePart")) or cookie
+            if part and part:IsA("BasePart") then
+                local vector, onScreen = Camera:WorldToViewportPoint(part.Position)
+                
+                if onScreen then
+                    local distance = (myPos - part.Position).Magnitude
+                    if not cookieDrawings[cookie] then
+                        local text = Drawing.new("Text")
+                        text.Size = 14
+                        text.Color = Color3.fromRGB(255, 200, 0) -- Warna Oranye/Kuning Kue
+                        text.Center = true
+                        text.Outline = true
+                        cookieDrawings[cookie] = text
+                    end
+                    
+                    local draw = cookieDrawings[cookie]
+                    draw.Position = Vector2.new(vector.X, vector.Y)
+                    draw.Text = "🍪 Kue [" .. math.floor(distance) .. "m]"
+                    draw.Visible = true
+                else
+                    if cookieDrawings[cookie] then cookieDrawings[cookie].Visible = false end
+                end
+            end
+        end
+    else
+        -- Sembunyikan semua teks jika fitur dimatikan
+        for _, text in pairs(cookieDrawings) do
+            text.Visible = false
+        end
+    end
+end)
+
+-- 4. CHARACTER MODIFICATIONS (SPEED, JUMP, NOCLIP, STAMINA)
+RunService.Heartbeat:Connect(function()
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    
+    if hum then
+        if _G.WalkSpeedEnabled then hum.WalkSpeed = customSpeed end
+        if _G.JumpPowerEnabled then 
+            hum.UseJumpPower = true
+            hum.JumpPower = customJump 
+        end
+    end
+    
+    if _G.NoClipEnabled and char then
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
+        end
+    end
+    
+    -- Bypass Stamina jika game menyimpannya di dalam script lokal karakter
+    if _G.InfiniteStamina and char then
+        local stamina = char:FindFirstChild("Stamina") or LocalPlayer:FindFirstChild("Stamina") or char:FindFirstChild("Energy")
+        if stamina and stamina:IsA("NumberValue") or stamina:IsA("IntValue") then
+            stamina.Value = 100
+        end
+    end
+end)
+
+
+-- ================== UI TABS & ELEMENTS ==================
+
+-- TAB UTAMA (MAIN/AUTOMATION)
+local TabMain = Window:CreateTab("Main", "zap")
 
 TabMain:CreateToggle({
-    Name = "Auto Collect Cookie 🍪",
+    Name = "Instant Auto Collect & Eat 🍪",
     CurrentValue = false,
-    Flag = "AutoCollect",
+    Flag = "AutoCollectEatFlag",
     Callback = function(state)
-        autoCollectEnabled = state
-        if state then initCookieESP() end
-    end,
-})
-
-TabMain:CreateToggle({
-    Name = "ESP Cookie",
-    CurrentValue = false,
-    Flag = "ESPCookie",
-    Callback = function(state)
-        espCookieEnabled = state
-        if state then initCookieESP() end
-    end,
-})
-
-TabMain:CreateButton({
-    Name = "🔄 Refresh ESP Cookie",
-    Callback = function()
-        initCookieESP()
+        _G.AutoCollectEat = state
         Rayfield:Notify({
-            Title = "Refresh",
-            Content = "ESP Cookie diperbarui!",
+            Title = "Auto Collect",
+            Content = state and "Instant Auto Collect + Eat AKTIF!" or "Auto Collect Dinonaktifkan.",
             Duration = 2,
-            Image = 4483362458,
+            Image = 4483362458
         })
     end,
 })
@@ -339,33 +265,103 @@ TabMain:CreateButton({
 TabMain:CreateDivider()
 
 TabMain:CreateToggle({
+    Name = "Infinite Stamina / Energy ⚡",
+    CurrentValue = false,
+    Flag = "InfStaminaFlag",
+    Callback = function(state)
+        _G.InfiniteStamina = state
+    end,
+})
+
+-- TAB VISUAL (ESP SYSTEM)
+local TabESP = Window:CreateTab("Visual ESP", "eye")
+
+TabESP:CreateToggle({
+    Name = "Grandma Hologram ESP 🟢",
+    CurrentValue = false,
+    Flag = "GrandmaESPFlag",
+    Callback = function(state)
+        _G.GrandmaESP = state
+    end,
+})
+
+TabESP:CreateToggle({
+    Name = "Cookies ESP 🍪",
+    CurrentValue = false,
+    Flag = "CookieESPFlag",
+    Callback = function(state)
+        _G.CookieESP = state
+    end,
+})
+
+-- TAB LOCAL PLAYER (PERGERAKAN)
+local TabPlayer = Window:CreateTab("Player Hack", "user")
+
+TabPlayer:CreateToggle({
+    Name = "Enable Speed Hack",
+    CurrentValue = false,
+    Flag = "SpeedToggle",
+    Callback = function(state)
+        _G.WalkSpeedEnabled = state
+        if not state then
+            local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum then hum.WalkSpeed = 16 end -- Kembalikan ke normal
+        end
+    end,
+})
+
+TabPlayer:CreateSlider({
+    Name = "Walk Speed Value",
+    Range = {16, 250},
+    Increment = 1,
+    CurrentValue = customSpeed,
+    Flag = "SpeedSlider",
+    Callback = function(val)
+        customSpeed = val
+    end,
+})
+
+TabPlayer:CreateDivider()
+
+TabPlayer:CreateToggle({
+    Name = "Enable Jump Hack",
+    CurrentValue = false,
+    Flag = "JumpToggle",
+    Callback = function(state)
+        _G.JumpPowerEnabled = state
+        if not state then
+            local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum then hum.JumpPower = 50 end -- Kembalikan ke normal
+        end
+    end,
+})
+
+TabPlayer:CreateSlider({
+    Name = "Jump Power Value",
+    Range = {50, 200},
+    Increment = 1,
+    CurrentValue = customJump,
+    Flag = "JumpSlider",
+    Callback = function(val)
+        customJump = val
+    end,
+})
+
+TabPlayer:CreateDivider()
+
+TabPlayer:CreateToggle({
     Name = "NoClip (Tembus Tembok)",
     CurrentValue = false,
-    Flag = "NoClip",
+    Flag = "NoClipFlag",
     Callback = function(state)
-        noclipEnabled = state
-        if state then startNoclip() else stopNoclip() end
+        _G.NoClipEnabled = state
     end,
 })
 
-TabMain:CreateToggle({
-    Name = "Chams Nenek (Merah)",
-    CurrentValue = false,
-    Flag = "ChamsNenek",
-    Callback = function(state)
-        toggleChams(state)
-        Rayfield:Notify({
-            Title = "Chams Nenek",
-            Content = state and "Chams Nenek AKTIF" or "Chams Nenek NONAKTIF",
-            Duration = 2,
-            Image = 4483362458,
-        })
-    end,
+-- Notifikasi bahwa UI berhasil dimuat sepenuhnya
+Rayfield:Notify({
+    Title = "Drip Client Loaded",
+    Content = "Script siap digunakan untuk mencuri seluruh kue!",
+    Duration = 3,
+    Image = 4483362458
 })
-
-LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(1)
-    if noclipEnabled then startNoclip() end
-end)
-
-print("[Putzzdev] Curi Kue Script loaded! 🍪")
