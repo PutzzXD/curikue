@@ -12,6 +12,15 @@ local LocalPlayer = Players.LocalPlayer
 local espCookieEnabled = false
 local noclipEnabled    = false
 local noclipConn        = nil
+local chamsEnabled = false
+local chamsColor = Color3.fromRGB(0, 255, 0) -- Hijau terang
+local chamsTransparency = 0.2 -- Biar tembus pandang
+local chamsMaterial = Enum.Material.Neon
+local chamsParts = {}
+local chamsConnections = {}
+
+local playerCounterEnabled = false
+local enemyCountText = nil
 
 -- ================== COOKIE ESP DATA ==================
 local cookieData = {}
@@ -168,6 +177,92 @@ TabMain:CreateToggle({
         noclipEnabled = state
         if state then startNoclip() else stopNoclip() end
     end,
+})
+
+-- ================== HOLOGRAM CHAMS (FIXED - PAKAI HIGHLIGHT ASLI) ==================
+local function applyChams(player)
+    if player == LocalPlayer then return end
+
+    local char = player.Character
+    if not char then return end
+
+    pcall(function()
+        -- Hapus highlight lama kalau ada, biar ga dobel
+        local old = char:FindFirstChild("ChamsHighlight")
+        if old then old:Destroy() end
+
+        local hl = Instance.new("Highlight")
+        hl.Name                = "ChamsHighlight"
+        hl.FillColor           = chamsColor
+        hl.FillTransparency    = chamsTransparency
+        hl.OutlineColor        = Color3.fromRGB(255, 255, 255)
+        hl.OutlineTransparency = 0
+        hl.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop -- ini yang bikin tembus tembok
+        hl.Adornee             = char
+        hl.Parent               = char
+
+        chamsParts[player] = hl
+    end)
+end
+
+local function removeChams(player)
+    if not player then return end
+
+    local hl = chamsParts[player]
+    if hl then
+        pcall(function() hl:Destroy() end)
+        chamsParts[player] = nil
+    end
+
+    -- Fallback: kalau ada player yang ChamsHighlight-nya nyangkut tanpa tabel
+    if player.Character then
+        local stray = player.Character:FindFirstChild("ChamsHighlight")
+        if stray then pcall(function() stray:Destroy() end) end
+    end
+end
+
+local function toggleChams(state)
+    chamsEnabled = state
+    
+    if state then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                applyChams(player)
+            end
+        end
+        
+        -- Monitor player baru
+        local conn = Players.PlayerAdded:Connect(function(player)
+            player.CharacterAdded:Connect(function(char)
+                task.wait(0.5)
+                if chamsEnabled and player ~= LocalPlayer then
+                    applyChams(player)
+                end
+            end)
+            if chamsEnabled and player ~= LocalPlayer then
+                task.wait(0.5)
+                applyChams(player)
+            end
+        end)
+        table.insert(chamsConnections, conn)
+        
+        -- Monitor player leaving
+        local conn2 = Players.PlayerRemoving:Connect(function(player)
+            removeChams(player)
+        end)
+        table.insert(chamsConnections, conn2)
+        
+    else
+        for _, player in pairs(Players:GetPlayers()) do
+            removeChams(player)
+        end
+        
+        for _, conn in pairs(chamsConnections) do
+            pcall(function() conn:Disconnect() end)
+        end
+        chamsConnections = {}
+    end
+end
 })
 
 LocalPlayer.CharacterAdded:Connect(function()
