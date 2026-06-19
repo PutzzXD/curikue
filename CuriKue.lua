@@ -13,8 +13,8 @@ local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 -- ================== INITIALIZATION ==================
 local Window = Rayfield:CreateWindow({
     Name = "Drip Client - Curi Kue 🍪",
-    LoadingTitle = "Putzzdev",
-    LoadingSubtitle = "Premium Edition",
+    LoadingTitle = "Drip X Putzzdev",
+    LoadingSubtitle = "Premium",
     Theme = "Amethyst",
     DisableRayfieldPrompts = true,
     DisableBuildWarnings = true,
@@ -26,7 +26,7 @@ local Window = Rayfield:CreateWindow({
 -- Toggles
 local _G = {
     AutoCollectEat = false,
-    GrandmaESP = false,
+    PlayerESP = false,
     CookieESP = false,
     WalkSpeedEnabled = false,
     JumpPowerEnabled = false,
@@ -39,33 +39,15 @@ local customSpeed = 50
 local customJump = 50
 
 -- Storage untuk ESP Drawing
-local grandmaHighlights = {}
+local playerHighlights = {}
 local cookieDrawings = {}
 
 -- ================== UTILITY FUNCTIONS ==================
-
--- Fungsi mencari Nenek di dalam Game (Berdasarkan nama umum NPC Nenek)
-local function getGrandma()
-    -- Mencari di Workspace
-    for _, obj in pairs(workspace:GetChildren()) do
-        if obj:IsA("Model") and (string.find(string.lower(obj.Name), "grandma") or string.find(string.lower(obj.Name), "nenek")) then
-            return obj
-        end
-    end
-    -- Mencari jika Nenek masuk sebagai Player/Bot khusus
-    for _, p in pairs(Players:GetPlayers()) do
-        if string.find(string.lower(p.Name), "grandma") or string.find(string.lower(p.Name), "nenek") then
-            return p.Character
-        end
-    end
-    return nil
-end
 
 -- Fungsi mencari objek Kue / Cookies di Map
 local function findCookies()
     local cookies = {}
     for _, obj in pairs(workspace:GetDescendants()) do
-        -- Menyesuaikan nama objek kue (Cookie, Cookies, Cake, dsb)
         if obj:IsA("BasePart") or obj:IsA("MeshPart") or obj:IsA("Model") then
             if string.find(string.lower(obj.Name), "cookie") or string.find(string.lower(obj.Name), "kue") then
                 table.insert(cookies, obj)
@@ -77,6 +59,39 @@ local function findCookies()
         end
     end
     return cookies
+end
+
+-- Fungsi menerapkan Hologram Hijau ke Player
+local function applyHighlightToPlayer(player)
+    if player == LocalPlayer then return end
+    
+    local function addHighlight(char)
+        if not char then return end
+        task.wait(0.3)
+        if _G.PlayerESP and not playerHighlights[player] then
+            local hl = Instance.new("Highlight")
+            hl.Name = "PlayerHoloESP"
+            hl.FillColor = Color3.fromRGB(0, 255, 0) -- Hijau Full
+            hl.OutlineColor = Color3.fromRGB(0, 255, 0)
+            hl.FillTransparency = 0.4
+            hl.OutlineTransparency = 0
+            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            hl.Adornee = char
+            hl.Parent = char
+            playerHighlights[player] = hl
+        end
+    end
+
+    if player.Character then addHighlight(player.Character) end
+    player.CharacterAdded:Connect(addHighlight)
+end
+
+-- Fungsi menghapus Hologram dari Player
+local function removeHighlightFromPlayer(player)
+    if playerHighlights[player] then
+        pcall(function() playerHighlights[player]:Destroy() end)
+        playerHighlights[player] = nil
+    end
 end
 
 -- ================== LOOP LOOPS / AUTOMATION ==================
@@ -92,43 +107,35 @@ task.spawn(function()
             for _, cookie in pairs(cookies) do
                 if _G.AutoCollectEat == false then break end
                 
-                -- Deteksi bagian utama part kue
                 local targetPart = cookie:IsA("Model") and (cookie:FindFirstChild("Handle") or cookie:FindFirstChildOfClass("BasePart")) or cookie
                 
                 if targetPart and targetPart:IsA("BasePart") then
-                    -- Simpan CFrame asli untuk dikembalikan nanti (mencegah glitch jatuh)
                     local originalCF = hrp.CFrame
                     
-                    -- INSTANT TELEPORT (Sangat cepat ke kue lalu balik lagi)
                     pcall(function()
-                        -- Teleport ke kue
                         hrp.CFrame = targetPart.CFrame
                         task.wait(0.05)
                         
-                        -- Trigger ProximityPrompt jika ada mekanismenya
                         local prompt = cookie:FindFirstChildOfClass("ProximityPrompt") or cookie.Parent:FindFirstChildOfClass("ProximityPrompt")
                         if prompt then
                             fireproximityprompt(prompt)
                         end
                         
-                        -- Simulasi Instan "Makan/Eat" (Biasanya menggunakan Tools di Inventory)
                         local backpack = LocalPlayer:FindFirstChild("Backpack")
                         local char = LocalPlayer.Character
                         
-                        -- Cari item kue di inventory untuk dipakai/dimakan
                         if backpack then
                             for _, tool in pairs(backpack:GetChildren()) do
                                 if string.find(string.lower(tool.Name), "cookie") or string.find(string.lower(tool.Name), "kue") then
-                                    tool.Parent = char -- Equip kue
+                                    tool.Parent = char
                                     task.wait(0.05)
-                                    tool:Activate() -- Makan kue
+                                    tool:Activate()
                                     task.wait(0.05)
-                                    tool.Parent = backpack -- Taruh kembali jika belum habis
+                                    tool.Parent = backpack
                                 end
                             end
                         end
                         
-                        -- Kembalikan posisi player ke posisi semula agar aman
                         hrp.CFrame = originalCF
                     end)
                 end
@@ -137,29 +144,17 @@ task.spawn(function()
     end
 end)
 
--- 2. NENEK ESP (HOLOGRAM GREEN)
+-- 2. PLAYER ESP CONTROLLER (MONITOR TOGGLE STATE)
 RunService.Heartbeat:Connect(function()
-    if _G.GrandmaESP then
-        local grandma = getGrandma()
-        if grandma and grandma:FindFirstChildOfClass("Humanoid") then
-            if not grandmaHighlights[grandma] then
-                local hl = Instance.new("Highlight")
-                hl.Name = "GrandmaHoloESP"
-                hl.FillColor = Color3.fromRGB(0, 255, 0) -- Hijau Full
-                hl.OutlineColor = Color3.fromRGB(0, 255, 0)
-                hl.FillTransparency = 0.4
-                hl.OutlineTransparency = 0
-                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                hl.Adornee = grandma
-                hl.Parent = grandma
-                grandmaHighlights[grandma] = hl
+    if _G.PlayerESP then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and not playerHighlights[player] and player.Character then
+                applyHighlightToPlayer(player)
             end
         end
     else
-        -- Hapus Highlight jika dimatikan
-        for gm, hl in pairs(grandmaHighlights) do
-            if hl then hl:Destroy() end
-            grandmaHighlights[gm] = nil
+        for player, _ in pairs(playerHighlights) do
+            removeHighlightFromPlayer(player)
         end
     end
 end)
@@ -170,7 +165,6 @@ RunService.RenderStepped:Connect(function()
         local myPos = LocalPlayer.Character.HumanoidRootPart.Position
         local cookies = findCookies()
         
-        -- Hapus text lama yang sudah tidak valid
         for cookie, text in pairs(cookieDrawings) do
             if not cookie or not cookie.Parent then
                 text.Visible = false
@@ -179,7 +173,6 @@ RunService.RenderStepped:Connect(function()
             end
         end
         
-        -- Buat atau perbarui posisi teks ESP kue
         for _, cookie in pairs(cookies) do
             local part = cookie:IsA("Model") and (cookie:FindFirstChild("Handle") or cookie:FindFirstChildOfClass("BasePart")) or cookie
             if part and part:IsA("BasePart") then
@@ -190,7 +183,7 @@ RunService.RenderStepped:Connect(function()
                     if not cookieDrawings[cookie] then
                         local text = Drawing.new("Text")
                         text.Size = 14
-                        text.Color = Color3.fromRGB(255, 200, 0) -- Warna Oranye/Kuning Kue
+                        text.Color = Color3.fromRGB(255, 200, 0)
                         text.Center = true
                         text.Outline = true
                         cookieDrawings[cookie] = text
@@ -206,14 +199,13 @@ RunService.RenderStepped:Connect(function()
             end
         end
     else
-        -- Sembunyikan semua teks jika fitur dimatikan
         for _, text in pairs(cookieDrawings) do
             text.Visible = false
         end
     end
 end)
 
--- 4. CHARACTER MODIFICATIONS (SPEED, JUMP, NOCLIP, STAMINA)
+-- 4. CHARACTER MODIFICATIONS
 RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -232,10 +224,9 @@ RunService.Heartbeat:Connect(function()
         end
     end
     
-    -- Bypass Stamina jika game menyimpannya di dalam script lokal karakter
     if _G.InfiniteStamina and char then
         local stamina = char:FindFirstChild("Stamina") or LocalPlayer:FindFirstChild("Stamina") or char:FindFirstChild("Energy")
-        if stamina and stamina:IsA("NumberValue") or stamina:IsA("IntValue") then
+        if stamina and (stamina:IsA("NumberValue") or stamina:IsA("IntValue")) then
             stamina.Value = 100
         end
     end
@@ -277,11 +268,11 @@ TabMain:CreateToggle({
 local TabESP = Window:CreateTab("Visual ESP", "eye")
 
 TabESP:CreateToggle({
-    Name = "Grandma Hologram ESP 🟢",
+    Name = "Player Hologram ESP 🟢",
     CurrentValue = false,
-    Flag = "GrandmaESPFlag",
+    Flag = "PlayerESPFlag",
     Callback = function(state)
-        _G.GrandmaESP = state
+        _G.PlayerESP = state
     end,
 })
 
@@ -305,13 +296,13 @@ TabPlayer:CreateToggle({
         _G.WalkSpeedEnabled = state
         if not state then
             local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if hum then hum.WalkSpeed = 16 end -- Kembalikan ke normal
+            if hum then hum.WalkSpeed = 16 end
         end
     end,
 })
 
 TabPlayer:CreateSlider({
-    Name = "Walk Speed Value",
+    Name = "Walk Speed",
     Range = {16, 250},
     Increment = 1,
     CurrentValue = customSpeed,
@@ -331,13 +322,13 @@ TabPlayer:CreateToggle({
         _G.JumpPowerEnabled = state
         if not state then
             local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if hum then hum.JumpPower = 50 end -- Kembalikan ke normal
+            if hum then hum.JumpPower = 50 end
         end
     end,
 })
 
 TabPlayer:CreateSlider({
-    Name = "Jump Power Value",
+    Name = "Jump Power",
     Range = {50, 200},
     Increment = 1,
     CurrentValue = customJump,
@@ -350,7 +341,7 @@ TabPlayer:CreateSlider({
 TabPlayer:CreateDivider()
 
 TabPlayer:CreateToggle({
-    Name = "NoClip (Tembus Tembok)",
+    Name = "NoClip",
     CurrentValue = false,
     Flag = "NoClipFlag",
     Callback = function(state)
@@ -358,10 +349,21 @@ TabPlayer:CreateToggle({
     end,
 })
 
--- Notifikasi bahwa UI berhasil dimuat sepenuhnya
+-- Player Join/Leave Connections untuk ESP
+Players.PlayerAdded:Connect(function(player)
+    if _G.PlayerESP then
+        applyHighlightToPlayer(player)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    removeHighlightFromPlayer(player)
+end)
+
+-- Notifikasi Selesai
 Rayfield:Notify({
-    Title = "Drip Client Loaded",
-    Content = "Script siap digunakan untuk mencuri seluruh kue!",
+    Title = "Drip Client Updated",
+    Content = "ESP Player Hijau Hologram siap digunakan!",
     Duration = 3,
     Image = 4483362458
 })
