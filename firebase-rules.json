@@ -1,0 +1,9 @@
+{
+  "rules": {
+    "players": { ".read": true, ".write": true },
+    "chats":   { ".read": true, ".write": true },
+    "rooms": {
+      "$code": { ".read": true, ".write": true }
+    }
+  }
+}
